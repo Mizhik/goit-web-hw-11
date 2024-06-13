@@ -2,6 +2,7 @@ from datetime import datetime,date
 from typing import Any
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from src.dtos.user import UserResponse
 
 class ContactSchema(BaseModel):
     first_name: str = Field(min_length=3, max_length=25)
@@ -35,6 +36,7 @@ class ContactResponse(BaseModel):
     email: EmailStr
     phone: str
     date_of_birth: date
+    user: UserResponse | None
 
     class Config:
         from_attributes = True

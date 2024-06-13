@@ -12,6 +12,10 @@ uvicorn = "^0.30.1"
 sqlalchemy = "^2.0.30"
 alembic = "^1.13.1"
 asyncpg = "^0.29.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+python-multipart = "^0.0.9"
+libgravatar = "^1.0.4"
 
 
 [build-system]
