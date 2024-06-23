@@ -1,3 +1,6 @@
+import pickle
+import redis
+
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -10,20 +13,29 @@ from jose import JWTError, jwt
 from src.database.db import get_db
 from src.repository import users as repository_users
 
-from src.conf.config import SECRET_KEY, ALGORITHM
+from src.conf.config import config
+
 
 class Auth:
     pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    SECRET_KEY = SECRET_KEY
-    ALGORITHM = ALGORITHM
+    
+    SECRET_KEY = config.SECRET_KEY
+    ALGORITHM = config.ALGORITHM
+
+    cache = redis.Redis(
+        host=config.REDIS_DOMAIN,
+        port=config.REDIS_PORT,
+        db=0,
+        password=config.REDIS_PASSWORD,
+    )
+
+    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
     def verify_password(self, plain_password, hashed_password):
         return self.pwd_context.verify(plain_password, hashed_password)
 
     def get_password_hash(self, password: str) -> str:
         return self.pwd_context.hash(password)
-
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
     async def create_access_token(
         self, data: dict, expires_delta: Optional[float] = None
@@ -41,7 +53,6 @@ class Auth:
         )
         return encoded_access_token
 
-    # define a function to generate a new refresh token
     async def create_refresh_token(
         self, data: dict, expires_delta: Optional[float] = None
     ):
@@ -77,7 +88,9 @@ class Auth:
             )
 
     async def get_current_user(
-        self, token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
+        self,
+        token: str = Depends(oauth2_scheme),
+        db: AsyncSession = Depends(get_db),
     ):
         credentials_exception = HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +99,6 @@ class Auth:
         )
 
         try:
-            # Decode JWT
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
             if payload["scope"] == "access_token":
                 email = payload["sub"]
@@ -97,10 +109,39 @@ class Auth:
         except JWTError:
             raise credentials_exception
 
-        user = await repository_users.get_user_by_email(email, db)
+        user_hash = str(email)
+
+        user = self.cache.get(user_hash)
+
         if user is None:
-            raise credentials_exception
+            print("User from database")
+            user = await repository_users.get_user_by_email(email, db)
+            if user is None:
+                raise credentials_exception
+            self.cache.set(user_hash, pickle.dumps(user))
+            self.cache.expire(user_hash, 300)
+        else:
+            print("User from cache")
+            user = pickle.loads(user)
         return user
 
+    def create_email_token(self, data: dict):
+        to_encode = data.copy()
+        expire = datetime.now() + timedelta(days=1)
+        to_encode.update({"iat": datetime.now(), "exp": expire})
+        token = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        return token
+
+    async def get_email_from_token(self, token: str):
+        try:
+            payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+            email = payload["sub"]
+            return email
+        except JWTError as e:
+            print(e)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid token for email verification",
+            )
 
 auth_service = Auth()

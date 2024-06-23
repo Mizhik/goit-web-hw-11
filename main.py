@@ -1,16 +1,45 @@
-from fastapi import FastAPI,Depends,HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from fastapi_limiter import FastAPILimiter
+import redis.asyncio as redis
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-from src.routes import contacts
-from src.routes import users
+from src.routes import contacts, users,email
 from src.database.db import get_db
+from src.conf.config import config
 
-app = FastAPI()
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    r = await redis.Redis(
+        host=config.REDIS_DOMAIN,
+        port=config.REDIS_PORT,
+        db=0,
+        password=config.REDIS_PASSWORD,
+    )
+    await FastAPILimiter.init(r)
+    yield
+    await r.close()
+
+app = FastAPI(lifespan=app_lifespan)
+origins = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(contacts.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(email.router, prefix="/api")
+
 
 @app.get("/")
 async def index():

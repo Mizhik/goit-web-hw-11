@@ -1,14 +1,16 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Query, Path
+from fastapi import APIRouter, HTTPException, Depends, status, Query, Path,Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.db import get_db
 from src.repository import contacts as repositories_contacts
 from src.dtos.contact import ContactResponse, ContactSchema
 
+from fastapi_limiter.depends import RateLimiter
+
 from src.entity.models import User
 from src.services.auth import auth_service
 
-router = APIRouter(prefix="/contacts", tags=["contants"])
+router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 
 @router.get("/upcoming_birthdays", response_model=list[ContactResponse])
@@ -66,7 +68,12 @@ async def get_contact(contact_id: int = Path(ge=1), db: AsyncSession = Depends(g
     return contact
 
 
-@router.post("/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=ContactResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(RateLimiter(times=1, seconds=20))],
+)
 async def create_contact(
     body: ContactSchema,
     db: AsyncSession = Depends(get_db),

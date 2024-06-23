@@ -30,3 +30,10 @@ async def create_user(body: UserSchema, db: AsyncSession = Depends(get_db)):
 async def update_token(user:User, token:str|None, db: AsyncSession):
     user.refresh_token = token
     await db.commit()
+
+async def update_avatar(email, url: str, db: AsyncSession) -> User:
+    user = await get_user_by_email(email, db)
+    user.avatar = url
+    await db.commit()
+    await db.refresh(user)
+    return user
