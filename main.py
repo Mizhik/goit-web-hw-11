@@ -8,7 +8,7 @@ import redis.asyncio as redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.routes import contacts, users,email
+from src.routes import contacts, users, email
 from src.database.db import get_db
 from src.conf.config import config
 
@@ -24,6 +24,7 @@ async def app_lifespan(app: FastAPI):
     await FastAPILimiter.init(r)
     yield
     await r.close()
+
 
 app = FastAPI(lifespan=app_lifespan)
 origins = ["*"]

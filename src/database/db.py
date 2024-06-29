@@ -1,5 +1,6 @@
 import contextlib
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     async_sessionmaker,
